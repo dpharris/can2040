@@ -209,6 +209,9 @@ recommended.  The `can2040_transmit()` function has processing
 overhead (it performs CRC calculation and bitstuffing on the message)
 and calling it from IRQ context may increase irq latency.
 
+It is valid to invoke `can2040_transmit()` on one ARM core while the
+other ARM core may be running `can2040_pio_irq_handler()`.
+
 ## can2040_check_transmit
 
 `int can2040_check_transmit(struct can2040 *cd)`
@@ -219,6 +222,75 @@ determine if a call to `can2040_transmit()` will succeed.
 
 It is valid to invoke `can2040_check_transmit()` from the user
 supplied `can2040_rx_cb` callback function.
+
+It is valid to invoke `can2040_check_transmit()` on one ARM core while
+the other ARM core may be running `can2040_pio_irq_handler()`.
+
+## can2040_stop
+
+`void can2040_stop(struct can2040 *cd)`
+
+This function disables processing of can2040 CAN bus messages.  Upon
+completion of this function the user supplied `can2040_rx_cb()`
+callback function will no longer be invoked.
+
+If this function is called while a message is queued for transmit then
+it is possible that the message may be successfully transmitted
+without it being removed from the local transmit queue and without a
+`CAN2040_NOTIFY_TX` event sent to the user supplied `can2040_rx_cb()`
+callback function.
+
+The can2040 CAN bus processing may be restarted by calling
+`can2040_start()`.
+
+To clear the transmit queue before restarting, call `can2040_setup()`,
+`can2040_callback_config()`, and then `can2040_start()`.
+
+## can2040_get_statistics
+
+`void can2040_get_statistics(struct can2040 *cd, struct can2040_stats *stats)`
+
+This function may be called to obtain can2040 receive and transmit
+statistics.  This may be useful for insight on how well the CAN bus
+network hardware is performing.
+
+The caller must allocate a `struct can2040_stats` and pass a pointer
+to it in the `stats` parameter.  The `can2040_get_statistics()`
+function will copy its internal can2040 statistics to the provided
+struct.  The caller may then inspect its local copy of `struct
+can2040_stats` after the function completes.
+
+The `can2040.h` header file provides the definition for `struct
+can2040_stats`.  It has the following fields:
+* `rx_total`: The total number of successfully received messages.
+  This is the number of times that `can2040_rx_cb()` is invoked with
+  `CAN2040_NOTIFY_RX`.
+* `tx_total`: The total number of successfully transmitted messages.
+  This is the number of times that `can2040_rx_cb()` is invoked with
+  `CAN2040_NOTIFY_TX`.
+* `tx_attempt`: The total number of transmit attempts.  If this is
+  more than one greater than `tx_total` it indicates some transmits
+  were retried.  A transmit may be retried due to line arbitration (a
+  transmit attempt was interrupted by a higher priority transmission
+  from another node on the CAN bus), due to the lack of an
+  acknowledgment from another node on the CAN bus, or due to some
+  other parse error during a transmit attempt.
+* `parse_error`: The total number of data errors observed during
+  content parsing on the CAN bus.  This may increment due to hardware
+  noise on the CAN bus, due to error frames generated from other nodes
+  on the CAN bus, due to lack of transmit acknowledgments on the CAN
+  bus, or due to some other error in read data.
+
+The above counters are only set to zero during the initial call to
+`can2040_setup()`.  One may call `can2040_get_statistics()`
+periodically and subtract each counter from the value found at the
+previous call to obtain the statistics over that discrete period.
+When subtracting, it is recommended to store the difference in a
+`uint32_t` for improved handling of 32bit counter rollovers.
+
+It is valid to invoke `can2040_get_statistics()` at any time after
+`can2040_setup()` is called (including from another ARM core and
+including from the user supplied `can2040_rx_cb` callback function).
 
 # Not reentrant safe
 
@@ -246,3 +318,16 @@ That is, one must ensure each instance is not reentrant with respect
 to itself, but it is not required to synchronize between instances.
 One may run both can2040 instances on the same ARM core or different
 ARM cores.
+
+# Using can2040 from C++
+
+The can2040 code is intended to be compiled with gcc.  If can2040.c is
+compiled with a C compiler and linked with a C++ application then be
+careful to always import the `can2040.h` header file into C++ code in
+"C" mode - for example:
+
+```c
+extern "C" {
+  #include "can2040.h"
+}
+```
