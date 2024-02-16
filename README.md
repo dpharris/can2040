@@ -3,7 +3,7 @@ Pi [rp2040](https://www.raspberrypi.com/products/rp2040/)
 micro-controllers.  It enables an rp2040 chip to implement
 [CAN bus](https://en.wikipedia.org/wiki/CAN_bus) using a standard CAN
 transceiver chip.  The code supports reading and writing CAN 2.0B data
-frames at rates up to 1Mbit per second.
+frames at rates up to 1Mbit per second.    
 
 For further information see:
 - [Features](docs/Features.md): Details about this software CAN bus
